@@ -31,7 +31,7 @@ const readOrganizacion = async (req: Request, res: Response, next: NextFunction)
 
 const readAll = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const organizaciones: IOrganizacionModel[] = await Organizacion.find();
+        const organizaciones: IOrganizacionModel[] = await Organizacion.find().populate('usuarios');
         return res.status(200).json(organizaciones);
     } catch (error) {
         return res.status(500).json({ error });
