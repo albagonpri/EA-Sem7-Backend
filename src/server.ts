@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config/config';
 import Logging from './library/Logging';
 import organizacionRoutes from './routes/Organizacion';
@@ -25,7 +26,7 @@ const StartServer = () => {
     /** Log the request */
     router.use((req, res, next) => {
         Logging.info(
-            `Incomming - METHOD: [${req.method}] - URL: [${req.url}] - IP: [${req.socket.remoteAddress}]`
+            `Incoming - METHOD: [${req.method}] - URL: [${req.url}] - IP: [${req.socket.remoteAddress}]`
         );
 
         res.on('finish', () => {
@@ -64,7 +65,37 @@ const StartServer = () => {
         });
     });
 
-    http.createServer(router).listen(config.server.port, () =>
+    /** Create HTTP Server */
+    const httpServer = http.createServer(router);
+
+    /** Initialize Socket.io */
+    const io = new SocketIOServer(httpServer, {
+        cors: {
+            origin: "http://localhost:4200", // Angular default port
+            methods: ["GET", "POST"]
+        }
+    });
+
+    /** Socket.io Connection Logic */
+    io.on('connection', (socket) => {
+        Logging.info(`Socket connected: ${socket.id}`);
+
+        // Listen for incoming chat messages
+        socket.on('message', (data: { user: string, text: string }) => {
+            Logging.info(`Message received from ${data.user}`);
+            
+            // Broadcast the message to all connected clients
+            io.emit('message', data);
+        });
+
+        // Handle client disconnection
+        socket.on('disconnect', () => {
+            Logging.info(`Socket disconnected: ${socket.id}`);
+        });
+    });
+
+    /** Listen on configured port via httpServer (NOT router.listen) */
+    httpServer.listen(config.server.port, () =>
         Logging.info(`Server is running on port ${config.server.port}`)
     );
 };
