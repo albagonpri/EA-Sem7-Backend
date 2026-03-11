@@ -7,8 +7,10 @@ import { config } from './config/config';
 import Logging from './library/Logging';
 import organizacionRoutes from './routes/Organizacion';
 import usuarioRoutes from './routes/Usuario';
+import mensajeRoutes from './routes/Mensaje';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger';
+import { MensajeService } from './services/Mensaje';
 
 const router = express();
 
@@ -50,6 +52,7 @@ const StartServer = () => {
     /** Routes */
     router.use('/organizaciones', organizacionRoutes);
     router.use('/usuarios', usuarioRoutes);
+    router.use('/mensajes', mensajeRoutes);
 
     /** Healthcheck */
     router.get('/ping', (req, res, next) => res.status(200).json({ hello: 'world' }));
@@ -76,23 +79,9 @@ const StartServer = () => {
         }
     });
 
-    /** Socket.io Connection Logic */
-    io.on('connection', (socket) => {
-        Logging.info(`Socket connected: ${socket.id}`);
-
-        // Listen for incoming chat messages
-        socket.on('message', (data: { user: string, text: string }) => {
-            Logging.info(`Message received from ${data.user}`);
-            
-            // Broadcast the message to all connected clients
-            io.emit('message', data);
-        });
-
-        // Handle client disconnection
-        socket.on('disconnect', () => {
-            Logging.info(`Socket disconnected: ${socket.id}`);
-        });
-    });
+    /** Initialize Mensaje Service para gestionar sockets */
+    const mensajeService = new MensajeService(io);
+    mensajeService.inicializarSockets();
 
     /** Listen on configured port via httpServer (NOT router.listen) */
     httpServer.listen(config.server.port, () =>
