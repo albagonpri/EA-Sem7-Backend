@@ -24,6 +24,16 @@ export class MensajeService {
             });
             */
 
+            socket.on('typing', (data: { usuario: string }) => {
+                Logging.info(`${data.usuario} está escribiendo...`);
+                socket.broadcast.emit('user-typing', data);
+            });
+
+            socket.on('stop-typing', (data: { usuario: string }) => {
+                Logging.info(`${data.usuario} dejó de escribir`);
+                socket.broadcast.emit('user-stop-typing', data);
+            });
+
             // Escuchar mensajes incoming
             socket.on('message', async (data: { usuario: string, organizacion: string, contenido: string }) => {
                 try {
@@ -79,6 +89,7 @@ export class MensajeService {
         const savedMensaje = await mensaje.save();
         return await savedMensaje.populate('usuario', 'name email');
     }
+
 
     /**
      * Obtiene todos los mensajes de una organización
