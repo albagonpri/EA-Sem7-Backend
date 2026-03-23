@@ -2,8 +2,15 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import Logging from '../library/Logging';
 import MensajeModel, { IMensajeModel } from '../models/Mensaje';
 
+interface UsuarioConectado {
+    socketId: string;
+    usuarioId: string;
+    nombre: string;
+}
+
 export class MensajeService {
     private io: SocketIOServer;
+    private usuariosConectados: Map<string, UsuarioConectado> = new Map();
 
     constructor(io: SocketIOServer) {
         this.io = io;
@@ -15,6 +22,19 @@ export class MensajeService {
     public inicializarSockets(): void {
         this.io.on('connection', (socket: Socket) => {
             Logging.info(`Socket conectado: ${socket.id}`);
+
+            socket.on('user-connected', (data: { usuarioId: string; nombre: string }) => {
+                if (!data?.usuarioId || !data?.nombre) return;
+
+                this.usuariosConectados.set(socket.id, {
+                    socketId: socket.id,
+                    usuarioId: data.usuarioId,
+                    nombre: data.nombre
+                });
+
+                Logging.info(`Usuario conectado: ${data.nombre}`);
+                this.emitirUsuariosConectados();
+            });
 
             /* 
             // Unirse a una sala de organización (DESACTIVADO PARA CHAT GLOBAL)
@@ -66,9 +86,16 @@ export class MensajeService {
 
             // Desconexión
             socket.on('disconnect', () => {
+                this.usuariosConectados.delete(socket.id);
+                this.emitirUsuariosConectados();
                 Logging.info(`Socket desconectado: ${socket.id}`);
             });
         });
+    }
+
+    private emitirUsuariosConectados(): void {
+        const lista = Array.from(this.usuariosConectados.values());
+        this.io.emit('connected-users', lista);
     }
 
     /**
@@ -89,7 +116,6 @@ export class MensajeService {
         const savedMensaje = await mensaje.save();
         return await savedMensaje.populate('usuario', 'name email');
     }
-
 
     /**
      * Obtiene todos los mensajes de una organización
