@@ -2,11 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import Logging from '../library/Logging';
 import MensajeModel from '../models/Mensaje';
 import UsuarioModel from '../models/Usuario';
-import { MensajeService } from '../services/Mensaje';
 
-/**
- * Obtener todos los mensajes de una organización
- */
 export const obtenerMensajesPorOrganizacion = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { organizacionId } = req.params;
@@ -26,7 +22,7 @@ export const obtenerMensajesPorOrganizacion = async (req: Request, res: Response
 
         const mensajes = await MensajeModel.find(query)
             .populate('usuario', 'name email')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: 1 });
 
         Logging.info(`Mensajes obtenidos para organización ${organizacionId}`);
         return res.status(200).json(mensajes);
@@ -36,9 +32,6 @@ export const obtenerMensajesPorOrganizacion = async (req: Request, res: Response
     }
 };
 
-/**
- * Obtener todos los mensajes (Global)
- */
 export const obtenerTodosLosMensajes = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { usuarioId } = req.query;
@@ -56,7 +49,7 @@ export const obtenerTodosLosMensajes = async (req: Request, res: Response, next:
 
         const mensajes = await MensajeModel.find(query)
             .populate('usuario', 'name email')
-            .sort({ createdAt: 1 }); // Sorted by date
+            .sort({ createdAt: 1 });
 
         Logging.info(`Todos los mensajes obtenidos`);
         return res.status(200).json(mensajes);
@@ -66,9 +59,6 @@ export const obtenerTodosLosMensajes = async (req: Request, res: Response, next:
     }
 };
 
-/**
- * Obtener mensajes no leídos de un usuario
- */
 export const obtenerMensajesNoLeidos = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { usuarioId } = req.params;
@@ -85,9 +75,6 @@ export const obtenerMensajesNoLeidos = async (req: Request, res: Response, next:
     }
 };
 
-/**
- * Marcar un mensaje como leído
- */
 export const marcarComoLeido = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { mensajeId } = req.params;
@@ -109,9 +96,6 @@ export const marcarComoLeido = async (req: Request, res: Response, next: NextFun
     }
 };
 
-/**
- * Eliminar un mensaje
- */
 export const eliminarMensaje = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { mensajeId } = req.params;

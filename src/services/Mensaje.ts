@@ -6,6 +6,7 @@ interface UsuarioConectado {
     socketId: string;
     usuarioId: string;
     nombre: string;
+    organizacionId: string;
 }
 
 export class MensajeService {
@@ -16,65 +17,56 @@ export class MensajeService {
         this.io = io;
     }
 
-    /**
-     * Inicializa los listeners de Socket.io
-     */
     public inicializarSockets(): void {
         this.io.on('connection', (socket: Socket) => {
             Logging.info(`Socket conectado: ${socket.id}`);
 
-            socket.on('user-connected', (data: { usuarioId: string; nombre: string }) => {
-                if (!data?.usuarioId || !data?.nombre) return;
+            socket.on('join-organization', (organizacionId: string) => {
+                if (!organizacionId) return;
+                socket.join(`org-${organizacionId}`);
+            });
+
+            socket.on('user-connected', (data: { usuarioId: string; nombre: string; organizacionId: string }) => {
+                if (!data?.usuarioId || !data?.nombre || !data?.organizacionId) return;
 
                 this.usuariosConectados.set(socket.id, {
                     socketId: socket.id,
                     usuarioId: data.usuarioId,
-                    nombre: data.nombre
+                    nombre: data.nombre,
+                    organizacionId: data.organizacionId
                 });
 
                 Logging.info(`Usuario conectado: ${data.nombre}`);
-                this.emitirUsuariosConectados();
+                this.emitirUsuariosConectados(data.organizacionId);
             });
 
-            /* 
-            // Unirse a una sala de organización (DESACTIVADO PARA CHAT GLOBAL)
-            socket.on('join-organization', (organizacionId: string) => {
-                socket.join(`org-${organizacionId}`);
-                Logging.info(`Socket ${socket.id} se unió a organización ${organizacionId}`);
-            });
-            */
-
-            socket.on('typing', (data: { usuario: string }) => {
+            socket.on('typing', (data: { usuario: string; organizacionId: string }) => {
                 Logging.info(`${data.usuario} está escribiendo...`);
-                socket.broadcast.emit('user-typing', data);
+                socket.to(`org-${data.organizacionId}`).emit('user-typing', data);
             });
 
-            socket.on('stop-typing', (data: { usuario: string }) => {
+            socket.on('stop-typing', (data: { usuario: string; organizacionId: string }) => {
                 Logging.info(`${data.usuario} dejó de escribir`);
-                socket.broadcast.emit('user-stop-typing', data);
+                socket.to(`org-${data.organizacionId}`).emit('user-stop-typing', data);
             });
 
-            // Escuchar mensajes incoming
-            socket.on('message', async (data: { usuario: string, organizacion: string, contenido: string }) => {
+            socket.on('message', async (data: { usuario: string; organizacion: string; contenido: string }) => {
                 try {
                     Logging.info(`Mensaje recibido de ${data.usuario}`);
-                    
-                    // Guardar el mensaje en la BD
+
                     const nuevoMensaje = await this.guardarMensaje(
                         data.contenido,
                         data.usuario,
                         data.organizacion
                     );
 
-                    // Emitir el mensaje a TODOS los clientes conectados (Chat Global)
-                    this.io.emit('message', nuevoMensaje);
+                    this.io.to(`org-${data.organizacion}`).emit('message', nuevoMensaje);
                 } catch (error) {
                     Logging.error(`Error al guardar mensaje: ${error}`);
                     socket.emit('error', { message: 'Error al guardar el mensaje' });
                 }
             });
 
-            // Marcar mensaje como leído
             socket.on('mark-as-read', async (mensajeId: string) => {
                 try {
                     await MensajeModel.findByIdAndUpdate(mensajeId, { leido: true });
@@ -84,23 +76,32 @@ export class MensajeService {
                 }
             });
 
-            // Desconexión
             socket.on('disconnect', () => {
-                this.usuariosConectados.delete(socket.id);
-                this.emitirUsuariosConectados();
+                const usuarioDesconectado = this.usuariosConectados.get(socket.id);
+
+                if (usuarioDesconectado) {
+                    this.usuariosConectados.delete(socket.id);
+                    this.emitirUsuariosConectados(usuarioDesconectado.organizacionId);
+                }
+
                 Logging.info(`Socket desconectado: ${socket.id}`);
             });
         });
     }
 
-    private emitirUsuariosConectados(): void {
-        const lista = Array.from(this.usuariosConectados.values());
-        this.io.emit('connected-users', lista);
+    private emitirUsuariosConectados(organizacionId: string): void {
+        const lista = Array.from(this.usuariosConectados.values())
+            .filter((usuario) => usuario.organizacionId === organizacionId)
+            .map(({ socketId, usuarioId, nombre, organizacionId }) => ({
+                socketId,
+                usuarioId,
+                nombre,
+                organizacionId
+            }));
+
+        this.io.to(`org-${organizacionId}`).emit('connected-users', lista);
     }
 
-    /**
-     * Guarda un nuevo mensaje en la base de datos
-     */
     public async guardarMensaje(
         contenido: string,
         usuarioId: string,
@@ -117,18 +118,12 @@ export class MensajeService {
         return await savedMensaje.populate('usuario', 'name email');
     }
 
-    /**
-     * Obtiene todos los mensajes de una organización
-     */
     public async obtenerMensajesPorOrganizacion(organizacionId: string): Promise<IMensajeModel[]> {
         return await MensajeModel.find({ organizacion: organizacionId })
             .populate('usuario', 'name email')
             .sort({ createdAt: -1 });
     }
 
-    /**
-     * Obtiene los mensajes no leídos de un usuario
-     */
     public async obtenerMensajesNoLeidos(usuarioId: string): Promise<IMensajeModel[]> {
         return await MensajeModel.find({ usuario: usuarioId, leido: false })
             .populate('usuario', 'name email')
