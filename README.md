@@ -1,4 +1,4 @@
-#Material utilizado#: 
+Material utilizado: 
 
 IA generativa: ChatGPT para estructura de los cambios a realizar y parte de mensajes.
 
